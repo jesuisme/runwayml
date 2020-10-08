@@ -1,23 +1,37 @@
-import json
-from requests import get, post
+from os import path, getenv
+from json import dumps, loads
 from base64 import b64encode, b64decode
 from time import time
 from urllib.request import urlopen, Request
+from dotenv import load_dotenv
+from requests import get, post
+
+env_file_path = './.env'
+if path.exists(env_file_path):
+    load_dotenv(dotenv_path=env_file_path)
+else:
+    print("No .env file found. Assuming an environment variable called MODEL_TOKEN exists")
+
+if getenv("MODEL_TOKEN") is not None:
+    model_token = getenv("MODEL_TOKEN")
+    print("Model token found")
+else:
+    raise RuntimeError("No .env file found and no environment variable called MODEL_TOKEN exists")
 
 
-def get_model_information():
+def get_model_information(token=model_token):
     get_request = get('https://munit-395cdb2f.hosted-models.runwayml.cloud/v1/info',
                       headers={
                           "Accept": "application/json",
                           "Content-Type": "application/json",
-                          "Authorization": "Bearer bT6zM+OwNRxd9LmC6h+G5w=="
+                          "Authorization": "Bearer " + token
                       })
 
     model_information = get_request.json()
     print(model_information)
 
 
-def query_model_with_requests(image_data):
+def query_model_with_requests(image_data, token=model_token):
     print('Querying the model with requests...')
     encoded_data = b64encode(image_data)
     utf8encode = str(encoded_data).encode("utf-8")
@@ -31,7 +45,7 @@ def query_model_with_requests(image_data):
                         headers={
                             "Accept": "application/json",
                             "Content-Type": "application/json",
-                            "Authorization": "Bearer bT6zM+OwNRxd9LmC6h+G5w=="
+                            "Authorization": "Bearer " + token
                         },
                         # data=json.dumps(model_input).encode('utf8'))
                         data=model_input)
@@ -46,7 +60,7 @@ def query_model_with_requests(image_data):
     return result
 
 
-def query_model_with_urllib(image_data):
+def query_model_with_urllib(image_data, token=model_token):
     print('Querying the model with urllib...')
     encoded_data = b64encode(image_data)
     inputs = {
@@ -60,15 +74,15 @@ def query_model_with_urllib(image_data):
         headers={
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": "Bearer bT6zM+OwNRxd9LmC6h+G5w==",
+            "Authorization": "Bearer " + token
         },
-        data=json.dumps(inputs).encode("utf8")
+        data=dumps(inputs).encode("utf8")
     )
 
     query_start = time()
 
     with urlopen(req) as url:
-        result = json.loads(url.read().decode("utf8"))
+        result = loads(url.read().decode("utf8"))
 
     query_duration = time() - query_start
     print('Done!! Elapsed time: {0}'.format(query_duration))
