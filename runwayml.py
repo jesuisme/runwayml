@@ -1,18 +1,19 @@
 from os import path, getenv
-from json import dumps, loads
-from base64 import b64encode, b64decode, decodebytes
+from json import dumps
+from base64 import encodebytes, decodebytes
 from time import time
-from re import sub, match
-from urllib.request import urlopen, Request
+from re import sub
 from dotenv import load_dotenv
 from requests import get, post
 
+# Load the environment file
 env_file_path = './.env'
 if path.exists(env_file_path):
     load_dotenv(dotenv_path=env_file_path)
 else:
     print("No .env file found. Assuming an environment variable called MODEL_TOKEN exists")
 
+# Check that the access token is present
 if getenv("MODEL_TOKEN") is not None:
     model_token = getenv("MODEL_TOKEN")
     print("Model token found")
@@ -21,6 +22,13 @@ else:
 
 
 def load_image(filename='huey.jpg'):
+    """
+    Load a jpeg or png image for processing
+    :param filename: the name of the file
+    :type: str
+    :return: the image data encoded in base64
+    :rtype: bytes
+    """
     file_types = ['png', 'jpg', 'jpeg']
     name, extension = filename.split('.')
 
@@ -29,12 +37,22 @@ def load_image(filename='huey.jpg'):
                            'with extension png, jpg, or jpeg')
 
     with open(filename, 'rb') as fp:
-        input_data = b64encode(fp.read())
+        # encoded_image_data = b64encode(fp.read())
+        encoded_image_data = encodebytes(fp.read())
 
-    return input_data
+    return encoded_image_data
 
 
 def get_model_information(url, token=model_token):
+    """
+    Get information about the API parameters for the model
+    :param url: the full API URL for the model info
+    :type: str
+    :param token: the account access token (must be obtained prior to use and stored in .env file)
+    :type: str
+    :return: the model information
+    :rtype: dict
+    """
     get_request = get(url,
                       headers={
                           "Accept": "application/json",
@@ -47,10 +65,18 @@ def get_model_information(url, token=model_token):
 
 
 def query_model_with_requests(url, image_data, token=model_token):
-    print('Querying the model with requests...')
+    """
+    Run the model on the image data
+    :param url: the full API URL for the model query
+    :type: str
+    :param image_data: the image to process
+    :type: bytes
+    :param token: the account access token (must be obtained prior to use and stored in .env file)
+    :type: str
+    :return: a base64 image string with the artistic style applied
+    :rtype: str
+    """
     decoded_data = image_data.decode('utf-8')
-
-
 
     model_input = {'image': decoded_data, 'style': 42}
 
@@ -66,68 +92,26 @@ def query_model_with_requests(url, image_data, token=model_token):
 
     query_duration = time() - query_start
     print('Done!! Elapsed time: {0}'.format(query_duration))
-    # print(post_request.json())
+
     model_output = post_request.json()
 
     result_string = model_output['image']
 
-    # remove the first 23 characters containing the encoding information in the string so we can properly encode
+    # remove the starting characters containing the encoding information so we can properly encode the binary image
     result = sub('data:image/jpeg;base64,', '', result_string)
-    if len(result) == len(result_string):  # The string wasn't found and no replacement was made
-        raise RuntimeError('Unable to find image encoding from API')
+    if len(result) == len(result_string):  # The substring wasn't found -- this should not happen
+        raise RuntimeError('Unable to find image encoding from API query result')
 
     return result
 
 
-def query_model_with_urllib(image_data, token=model_token):
-    print('Querying the model with urllib...')
-    encoded_data = b64encode(image_data)
-    inputs = {
-                 "image": encoded_data,
-                 "style": 42
-    }
-
-    req = Request(
-        "https://munit-395cdb2f.hosted-models.runwayml.cloud/v1/query",
-        method="POST",
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + token
-        },
-        data=dumps(inputs).encode("utf8")
-    )
-
-    query_start = time()
-
-    with urlopen(req) as url:
-        result = loads(url.read().decode("utf8"))
-
-    query_duration = time() - query_start
-    print('Done!! Elapsed time: {0}'.format(query_duration))
-
-    return b64decode(result["image"])
-
-
 if __name__ == '__main__':
-
-    # filename = 'lt.png'
-    # file_types = ['png', 'jpg', 'jpeg']
-    # name, extension = filename.split('.')
-    #
-    # if str.lower(extension) not in file_types:
-    #     raise RuntimeError('Only JPEG and PNG images can be used. Also, naming pattern must be <name>.<extension> '
-    #                        'with extension png, jpg, or jpeg')
-    #
-    # with open(filename, 'rb') as fp:
-    #     input_data = b64encode(fp.read())
-
     info_url = 'https://munit-395cdb2f.hosted-models.runwayml.cloud/v1/info'
     query_url = 'https://munit-395cdb2f.hosted-models.runwayml.cloud/v1/query'
 
     input_data = load_image()
     model_information = get_model_information(info_url)
-    result = query_model_with_requests(query_url, input_data)
+    query_result = query_model_with_requests(query_url, input_data)
 
     with open('output_image.jpg', 'wb') as output:
-        output.write(decodebytes(result.encode('utf-8')))
+        output.write(decodebytes(query_result.encode('utf-8')))
